@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block content %}
+  {% set latest = runs[0] if runs else none %}
+  <section class="page-head">
+    <h1>概览</h1>
+    <p>每日运行与信源健康一览，数据只读；手动测试发送仅在点击按钮时触发。</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>今日情报概况</h2>
+      {% if latest %}
+        <span class="meta">最近一次：{{ latest.kind }} · {{ fmt_run_time(latest.finished_at, run_timezone) }}</span>
+      {% else %}
+        <span class="meta">尚无运行记录</span>
+      {% endif %}
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <span class="stat-label">今日运行状态</span>
+        {% if latest %}
+          <span class="badge badge-{{ latest.status }} badge-lg">{{ latest.status_label }}</span>
+        {% else %}
+          <span class="badge badge-neutral badge-lg">暂无记录</span>
+        {% endif %}
+        <span class="stat-sub">{{ latest.kind if latest else "等待首次运行" }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">今日收集</span>
+        <span class="stat-value">{{ latest.collected_count if latest else "—" }}</span>
+        <span class="stat-sub">新增采集条数</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">今日已发送</span>
+        <span class="stat-value">{{ latest.sent_count if latest else "—" }}</span>
+        <span class="stat-sub">飞书推送条数</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">今日失败</span>
+        {% if latest and latest.failed_count %}
+          <span class="stat-value value-fail">{{ latest.failed_count }}</span>
+        {% else %}
+          <span class="stat-value">{{ latest.failed_count if latest else "—" }}</span>
+        {% endif %}
+        <span class="stat-sub">失败信源/步骤</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>信源健康</h2>
+      <span class="meta">{{ sources | length }} 个信源 ·
+        {{- " " }}{{ sources | selectattr("enabled") | list | length }} 个启用</span>
+    </div>
+    <div class="source-grid">
+      {% for source in sources %}
+        {% set license_label = {"low": "低", "medium": "中", "high": "高"}.get(source.license_risk, "未知") %}
+        {% set license_class = {"low": "chip-neutral", "medium": "chip-warn", "high": "chip-risk"}.get(source.license_risk, "chip-neutral") %}
+        {% set stable_label = {"low": "低", "medium": "中", "high": "高"}.get(source.crawl_stability_risk, "未知") %}
+        {% set stable_class = {"low": "chip-neutral", "medium": "chip-warn", "high": "chip-risk"}.get(source.crawl_stability_risk, "chip-neutral") %}
+        <article class="source-card">
+          <div class="source-head">
+            <h3 class="source-name">
+              <a href="{{ source.url }}" rel="noreferrer">{{ source.name }}</a>
+            </h3>
+            <span class="badge {{ 'badge-success' if source.enabled else 'badge-neutral' }}">
+              {{ "启用中" if source.enabled else "已停用" }}
+            </span>
+          </div>
+          <p class="source-sub">{{ source.publisher }} · {{ source.topic }}</p>
+          <div class="chip-row">
+            <span class="chip">{{ "一手" if source.source_type == "primary" else "二手" }}</span>
+            <span class="chip">{{ source.priority_tier }}</span>
+            <span class="chip {{ 'chip-neutral' if source.adapter_type == 'pending_html' else 'chip-ok' }}">
+              {{ "尚未接入抓取" if source.adapter_type == "pending_html" else "已接入" }}
+            </span>
+            <span class="chip {{ 'chip-ok' if source.allow_external_ai else 'chip-neutral' }}">
+              {{ "允许外部 AI" if source.allow_external_ai else "仅本机处理" }}
+            </span>
+            <span class="chip {{ license_class }}">合规风险 {{ license_label }}</span>
+            <span class="chip {{ stable_class }}">稳定性 {{ stable_label }}</span>
+          </div>
+          <p class="source-last" title="{{ source.last_success_at or '' }}">
+            最近成功：{{ source.last_success_at or "暂无记录" }}
+          </p>
+          <p class="source-last" title="{{ source.last_success_cursor or '' }}">
+            游标：{{ source.last_success_cursor or "—" }}
+          </p>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>手动测试发送</h2>
+      <span class="meta">真实数据 → 飞书测试群</span>
+    </div>
+    <p class="hint">
+      强制采集+摘要（含当日已推送内容）并发往飞书测试群；
+      结果以“手动测试”运行记录保存，不影响每日汇总进度。
+    </p>
+    <form method="post" action="/test-send">
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">立即测试发送（真实数据 → 飞书测试群）</button>
+      </div>
+    </form>
+    {% if test_send_result %}
+      <p class="hint">
+        <span class="chip {{ 'chip-ok' if test_send_result.ok else 'chip-risk' }}">
+          {{ "成功" if test_send_result.ok else "失败" }}
+        </span>
+        {{ test_send_result.message }}
+      </p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>最近运行</h2>
+      <a class="text-link" href="/runs">全部运行记录 →</a>
+    </div>
+    {% if runs %}
+      <ol class="timeline">
+        {% for run in runs[:5] %}
+          <li class="timeline-item">
+            <span class="timeline-dot dot-{{ run.status }}" aria-hidden="true"></span>
+            <div class="timeline-body">
+              <div class="timeline-main">
+                <span class="badge badge-{{ run.status }}">{{ run.status_label }}</span>
+                <strong class="run-kind">{{ run.kind }}</strong>
+                <span class="meta">{{ fmt_run_time(run.finished_at, run_timezone) }}</span>
+              </div>
+              <div class="chip-row">
+                <span class="chip">采集 {{ run.collected_count }}</span>
+                <span class="chip">入选 {{ run.selected_count }}</span>
+                <span class="chip">已发送 {{ run.sent_count }}</span>
+                <span class="chip {{ 'chip-risk' if run.failed_count else '' }}">失败 {{ run.failed_count }}</span>
+                <span class="chip">耗时 {{ fmt_duration(run) }}</span>
+              </div>
+              {% if run.error_summary %}
+                <details class="error-details">
+                  <summary>错误摘要</summary>
+                  <p class="error-text">{{ run.error_summary }}</p>
+                </details>
+              {% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <p class="empty">暂无运行记录，等待任务进程执行。</p>
+    {% endif %}
+  </section>
+{% endblock %}

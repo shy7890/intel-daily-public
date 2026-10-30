@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="page-head">
+    <h1>今日情报（{{ date_label }}）</h1>
+    <p>按板块分组的最新情报，点击原文标题可直接访问原始来源。</p>
+  </section>
+
+  {% for block_name, entries in grouped.items() %}
+    <section class="card">
+      <div class="card-head">
+        <h2>{{ block_name }}</h2>
+        <span class="meta">{{ entries | length }} 条</span>
+      </div>
+      <ul class="digest-list">
+        {% for entry in entries %}
+          <li class="digest-item">
+            <div class="digest-main">
+              {% if entry.url %}
+                <a class="digest-title" href="{{ entry.url }}" rel="noreferrer">{{ entry.title }}</a>
+              {% else %}
+                <span class="digest-title">{{ entry.title }}</span>
+              {% endif %}
+              <div class="chip-row">
+                <span class="chip {{ 'chip-ok' if entry.importance == 'high' else ('chip-warn' if entry.importance == 'medium' else 'chip-neutral') }}">
+                  重要程度 {{ "高" if entry.importance == "high" else ("中" if entry.importance == "medium" else "低") }}
+                </span>
+                <span class="chip">{{ entry.publisher }}</span>
+                <span class="chip">{{ entry.published_at[:10] }}</span>
+              </div>
+              <p class="digest-summary">{{ entry.summary }}</p>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endfor %}
+
+  {% if not grouped %}
+    <section class="card">
+      <p class="empty">今日暂无情报。</p>
+    </section>
+  {% endif %}
+{% endblock %}

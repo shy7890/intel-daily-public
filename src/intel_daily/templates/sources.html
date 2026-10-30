@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="page-head">
+    <h1>信源</h1>
+    <p>这里保存信源治理信息。标记为“尚未接入抓取”的入口不会被任务进程调用。</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>信源清单</h2>
+      <span class="meta">共 {{ sources | length }} 个信源</span>
+    </div>
+    <div class="source-grid">
+      {% for source in sources %}
+        {% set license_label = {"low": "低", "medium": "中", "high": "高"}.get(source.license_risk, "未知") %}
+        {% set license_class = {"low": "chip-neutral", "medium": "chip-warn", "high": "chip-risk"}.get(source.license_risk, "chip-neutral") %}
+        {% set stable_label = {"low": "低", "medium": "中", "high": "高"}.get(source.crawl_stability_risk, "未知") %}
+        {% set stable_class = {"low": "chip-neutral", "medium": "chip-warn", "high": "chip-risk"}.get(source.crawl_stability_risk, "chip-neutral") %}
+        <article class="source-card">
+          <div class="source-head">
+            <h3 class="source-name">
+              <a href="{{ source.url }}" rel="noreferrer">{{ source.name }}</a>
+            </h3>
+            <span class="badge {{ 'badge-success' if source.enabled else 'badge-neutral' }}">
+              {{ "启用中" if source.enabled else "已停用" }}
+            </span>
+          </div>
+          <p class="source-sub">{{ source.publisher }} · {{ source.topic }}</p>
+          <div class="chip-row">
+            <span class="chip">{{ "一手" if source.source_type == "primary" else "二手" }}</span>
+            <span class="chip">{{ source.priority_tier }}</span>
+            <span class="chip {{ 'chip-neutral' if source.adapter_type == 'pending_html' else 'chip-ok' }}">
+              {{ "尚未接入抓取" if source.adapter_type == "pending_html" else "已接入" }}
+            </span>
+            <span class="chip {{ 'chip-ok' if source.allow_external_ai else 'chip-neutral' }}">
+              {{ "允许外部 AI" if source.allow_external_ai else "仅本机处理" }}
+            </span>
+            <span class="chip {{ license_class }}">合规风险 {{ license_label }}</span>
+            <span class="chip {{ stable_class }}">稳定性 {{ stable_label }}</span>
+          </div>
+          <p class="source-last" title="{{ source.last_success_at or '' }}">
+            最近成功：{{ source.last_success_at or "暂无记录" }}
+          </p>
+          <p class="source-last" title="{{ source.last_success_cursor or '' }}">
+            游标：{{ source.last_success_cursor or "—" }}
+          </p>
+          <div class="source-actions">
+            <form method="post" action="/sources/{{ source.id }}/ai">
+              <input type="hidden" name="allow" value="{{ 'false' if source.allow_external_ai else 'true' }}">
+              <button type="submit" class="btn btn-subtle">
+                {{ "关闭外部 AI" if source.allow_external_ai else "开启外部 AI" }}
+              </button>
+            </form>
+            <form method="post" action="/sources/{{ source.id }}/enabled">
+              <input type="hidden" name="enabled" value="{{ 'false' if source.enabled else 'true' }}">
+              <button type="submit" class="btn btn-subtle {{ 'btn-stop' if source.enabled else 'btn-go' }}">
+                {{ "停用" if source.enabled else "启用" }}
+              </button>
+            </form>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}

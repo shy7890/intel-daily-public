@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="page-head">
+    <h1>运行状态</h1>
+    <p>这里只读展示最近运行记录，不触发重试或外部发送。</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>运行记录</h2>
+      <span class="meta">最近 {{ runs | length }} 条，时间按系统配置时区显示</span>
+    </div>
+    {% if runs %}
+      <ol class="timeline">
+        {% for run in runs %}
+          <li class="timeline-item">
+            <span class="timeline-dot dot-{{ run.status }}" aria-hidden="true"></span>
+            <div class="timeline-body">
+              <div class="timeline-main">
+                <span class="badge badge-{{ run.status }}">{{ run.status_label }}</span>
+                <strong class="run-kind">{{ run.kind }}</strong>
+                {% if run.finished_at %}
+                  <span class="meta">{{ fmt_run_time(run.finished_at, run_timezone) }}</span>
+                {% else %}
+                  <span class="meta">进行中（尚未结束）</span>
+                {% endif %}
+              </div>
+              <div class="chip-row">
+                <span class="chip">采集 {{ run.collected_count }}</span>
+                <span class="chip">入选 {{ run.selected_count }}</span>
+                <span class="chip">已发送 {{ run.sent_count }}</span>
+                <span class="chip {{ 'chip-risk' if run.failed_count else '' }}">失败 {{ run.failed_count }}</span>
+                <span class="chip">耗时 {{ fmt_duration(run) }}</span>
+              </div>
+              {% if run.error_summary %}
+                <details class="error-details">
+                  <summary>错误摘要</summary>
+                  <p class="error-text">{{ run.error_summary }}</p>
+                </details>
+              {% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <p class="empty">暂无运行记录。</p>
+    {% endif %}
+  </section>
+{% endblock %}

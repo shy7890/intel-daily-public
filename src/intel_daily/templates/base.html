@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>{{ page_title }} · 新能源每日情报</title>
+    <link rel="stylesheet" href="/static/app.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#page-main">跳到主要内容</a>
+    <header class="site-header">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <path style="fill: var(--brand)" d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2Z"/>
+        </svg>
+        <span class="brand-text">
+          <strong>新能源每日情报</strong>
+          <small>内部管理台</small>
+        </span>
+      </div>
+      {% set path = request.url.path %}
+      <nav class="top-nav" aria-label="主导航">
+        <a href="/"{% if path == "/" %} aria-current="page"{% endif %}>概览</a>
+        <a href="/sources"{% if path == "/sources" %} aria-current="page"{% endif %}>信源</a>
+        <a href="/settings"{% if path == "/settings" %} aria-current="page"{% endif %}>关注与推送</a>
+        <a href="/digest"{% if path == "/digest" %} aria-current="page"{% endif %}>今日情报</a>
+        <a href="/runs"{% if path == "/runs" %} aria-current="page"{% endif %}>运行状态</a>
+      </nav>
+    </header>
+    <main id="page-main" class="page-main">
+      {% block content %}{% endblock %}
+    </main>
+    <footer class="site-footer">
+      新能源每日情报 · 内部工具 · 时间按系统配置时区显示
+    </footer>
+  </body>
+</html>

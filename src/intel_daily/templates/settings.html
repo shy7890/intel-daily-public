@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="page-head">
+    <h1>关注与推送</h1>
+    <p>配置每日抓取计划、关注主题与关键词；密钥只在此显示配置状态，不显示值。</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>每日计划</h2>
+      <span class="meta">下一次计划时间：{{ next_due.strftime("%Y-%m-%d %H:%M %Z") }}</span>
+    </div>
+    <form method="post" action="/settings/schedule" class="form-grid">
+      <label class="field">
+        时区
+        <input name="timezone" value="{{ schedule.timezone }}" required>
+      </label>
+      <label class="field">
+        每日执行时间
+        <input
+          type="time"
+          name="daily_time"
+          value="{{ schedule.daily_time.strftime('%H:%M') }}"
+          required
+        >
+      </label>
+      <label class="field">
+        运行日期
+        <select name="weekdays_only">
+          <option value="false" {% if not schedule.weekdays_only %}selected{% endif %}>
+            每天
+          </option>
+          <option value="true" {% if schedule.weekdays_only %}selected{% endif %}>
+            仅工作日
+          </option>
+        </select>
+      </label>
+      <label class="field span-full">
+        关注主题（每行一个）
+        <textarea name="topics" rows="6">{{ schedule.topics | join('\n') }}</textarea>
+      </label>
+      <label class="field span-full">
+        关键词（每行一个）
+        <textarea name="keywords" rows="6">{{ schedule.keywords | join('\n') }}</textarea>
+      </label>
+      <label class="field span-full">
+        排除词（每行一个）
+        <textarea name="exclude_words" rows="4">{{ schedule.exclude_words | join('\n') }}</textarea>
+      </label>
+      <div class="form-actions span-full">
+        <button type="submit" class="btn btn-primary">保存设置</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>密钥状态</h2>
+    </div>
+    <dl class="secret-list">
+      <div class="secret-row">
+        <dt>飞书机器人</dt>
+        <dd><span class="chip {{ 'chip-ok' if feishu_configured else 'chip-neutral' }}">{{ "已配置" if feishu_configured else "未配置" }}</span></dd>
+      </div>
+      <div class="secret-row">
+        <dt>AI API</dt>
+        <dd><span class="chip {{ 'chip-ok' if ai_configured else 'chip-neutral' }}">{{ "已配置" if ai_configured else "未配置" }}</span></dd>
+      </div>
+    </dl>
+    <p class="hint">控制台只显示配置状态，密钥值仅从服务器环境变量读取。</p>
+  </section>
+{% endblock %}

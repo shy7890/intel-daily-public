@@ -1,0 +1,57 @@
+name: intel-daily
+
+services:
+  control:
+    build: .
+    image: intel-daily:0.2.2
+    command: ["python", "-m", "intel_daily.web"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      INTEL_DB_PATH: /data/intel.db
+      # web 默认仅绑定 127.0.0.1（本机直跑安全）；容器内须经 eth0 接住端口映射
+      INTEL_WEB_HOST: 0.0.0.0
+    volumes:
+      - ./data:/data
+    mem_limit: 768m
+    cpus: 1.0
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  worker:
+    build: .
+    image: intel-daily:0.2.2
+    command: ["python", "-m", "intel_daily.worker", "--check-due", "--send"]
+    profiles: ["worker"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      INTEL_DB_PATH: /data/intel.db
+    volumes:
+      - ./data:/data
+    mem_limit: 768m
+    cpus: 0.5
+    restart: "no"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
