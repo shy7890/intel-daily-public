@@ -9,6 +9,8 @@ from zoneinfo import ZoneInfo
 import sqlite3
 from pathlib import Path
 
+from intel_daily.gate import is_web_url
+
 _TIMEZONE = ZoneInfo("Asia/Shanghai")
 
 SESSION_LABELS = {"high": "高", "medium": "中", "low": "低"}
@@ -75,12 +77,15 @@ def fetch_items(
         rows = connection.execute(
             f"""
             SELECT
-                id, external_id, title, original_url, publisher, published_at,
-                category, importance, summary, verification_status
-            FROM intelligence_items
-            WHERE status IN ({status_filter})
-              AND substr(published_at, 1, 10) >= ?
-            ORDER BY published_at DESC, id DESC
+                item.id, item.external_id, item.title, item.original_url,
+                item.publisher, item.published_at, item.category, item.importance,
+                item.summary, item.verification_status,
+                COALESCE(source.allow_external_ai, 0) AS allow_external_ai
+            FROM intelligence_items AS item
+            LEFT JOIN sources AS source ON source.id = item.source_id
+            WHERE item.status IN ({status_filter})
+              AND substr(item.published_at, 1, 10) >= ?
+            ORDER BY item.published_at DESC, item.id DESC
             LIMIT {FETCH_LIMIT}
             """,
             (_window_floor(now, days),),
@@ -178,7 +183,7 @@ class FeishuWebhookNotifier:
 
 
 def render_digest(rows: list[dict], date_label: str) -> str:
-    usable = [row for row in rows if row.get("original_url")]
+    usable = [row for row in rows if is_web_url(row.get("original_url"))]
     skipped = len(rows) - len(usable)
     lines: list[str] = [f"新能源每日情报 {date_label}"]
     by_category: dict[str, list[dict]] = {}

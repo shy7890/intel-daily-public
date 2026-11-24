@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from intel_daily.gate import is_web_url
 from intel_daily.similarity import merge_similar
 
 IMPORTANCE_ORDER = {"high": 0, "medium": 1, "low": 2}
@@ -37,6 +38,7 @@ class DigestEntry:
     id: int | None = None
     note: str = ""
     related_links: tuple[tuple[str, str, str], ...] = ()
+    allow_external_ai: bool = False
 
 
 @dataclass(frozen=True)
@@ -78,7 +80,7 @@ def plan_entries(
     usable = [
         row
         for row in rows
-        if (row.get("original_url") or "").strip()
+        if is_web_url(row.get("original_url"))
         and not _is_demo(row)
     ]
     base = [
@@ -137,7 +139,9 @@ def _group(entries: list[DigestEntry]) -> dict[str, tuple[DigestEntry, ...]]:
 def _to_entry(row: dict) -> DigestEntry:
     note = row.get("note") or ""
     return DigestEntry(
-        related_links=tuple(row.get("related_links") or ()),
+        related_links=tuple(
+            link for link in (row.get("related_links") or ()) if is_web_url(link[1])
+        ),
         title=row.get("title") or "",
         summary=row.get("summary") or "",
         block=block_of(row.get("category") or ""),
@@ -147,6 +151,7 @@ def _to_entry(row: dict) -> DigestEntry:
         published_at=row.get("published_at") or "",
         id=row.get("id"),
         note=note,
+        allow_external_ai=row.get("allow_external_ai") in (True, 1),
     )
 
 
@@ -183,8 +188,10 @@ class DeepSeekRankEngine:
         self.timeout = timeout
 
     def rank(self, entries: list[DigestEntry]) -> list[DigestEntry] | None:
+        local = [entry for entry in entries if not entry.allow_external_ai]
+        entries = [entry for entry in entries if entry.allow_external_ai]
         if not entries:
-            return []
+            return None
         import json
         import urllib.error
         import urllib.request
@@ -247,7 +254,12 @@ class DeepSeekRankEngine:
             entry = entries[index]
             note = str(notes.get(str(index), ""))[:60] if isinstance(notes, dict) else ""
             out.append(replace(entry, note=note))
-        return out
+        if not local:
+            return out
+        local.sort(key=lambda entry: entry.published_at, reverse=True)
+        return sorted(
+            local + out, key=lambda entry: IMPORTANCE_ORDER.get(entry.importance, 2)
+        )
 
 
 def render_brief_limited(

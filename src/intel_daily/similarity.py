@@ -143,11 +143,15 @@ class DeepSeekSimilarityMerger(SimilarityMerger):
         self.timeout = timeout
 
     def find_groups(self, entries: list[DigestEntry]) -> list[list[int]] | None:
-        if not entries:
+        eligible_indices = [
+            index for index, entry in enumerate(entries) if entry.allow_external_ai
+        ]
+        if len(eligible_indices) < 2:
             return []
+        eligible = [entries[index] for index in eligible_indices]
         items = [
             {"i": i, "title": e.title[:80], "summary": e.summary[:120], "published_at": e.published_at[:10]}
-            for i, e in enumerate(entries)
+            for i, e in enumerate(eligible)
         ]
         payload = {
             "model": self.model,
@@ -176,7 +180,10 @@ class DeepSeekSimilarityMerger(SimilarityMerger):
         try:
             data = json.loads(body.decode("utf-8"))
             result = json.loads(data["choices"][0]["message"]["content"])
-            return self.parse_groups(result, entries)
+            return [
+                [eligible_indices[index] for index in group]
+                for group in self.parse_groups(result, eligible)
+            ]
         except (json.JSONDecodeError, UnicodeDecodeError, KeyError, IndexError, TypeError, ValueError):
             return None
 

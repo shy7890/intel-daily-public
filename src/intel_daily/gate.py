@@ -20,10 +20,20 @@ _REQUIRED_FIELDS = (
 _ALLOWED_URL_SCHEMES = ("http", "https")
 
 
-def _url_scheme_ok(value: Any) -> bool:
-    if not isinstance(value, str) or not value.strip():
+def is_web_url(value: Any) -> bool:
+    if not isinstance(value, str) or not value:
         return False
-    return urlparse(value.strip()).scheme.lower() in _ALLOWED_URL_SCHEMES
+    if any(ord(char) <= 32 or ord(char) == 127 or char == "\\" for char in value):
+        return False
+    try:
+        parsed = urlparse(value)
+        return (
+            parsed.scheme in _ALLOWED_URL_SCHEMES
+            and bool(parsed.hostname)
+            and parsed.username is None
+        )
+    except ValueError:
+        return False
 
 
 def evidence_passes(
@@ -45,7 +55,7 @@ def evidence_passes(
         if not isinstance(values[name], str)
         or not values[name].strip()
     )
-    if "original_url" not in missing and not _url_scheme_ok(original_url):
+    if "original_url" not in missing and not is_web_url(original_url):
         # 有链接但协议不可追溯：仍计入 original_url 缺失（条目保留，仅降级）。
         missing = (*missing, "original_url")
     return GateResult(passed=not missing, missing=missing)
