@@ -156,3 +156,26 @@ def test_deepseek_merger_group_indices_validated():
     assert merger.parse_groups({"groups": [[0, 2], [1]], "extra": "x"}, entries) == [[0, 2]]
     assert merger.parse_groups({"groups": [[0, 5], [1]], "extra": "x"}, entries) == []
     assert merger.parse_groups({"groups": ["a", [0, 1]], "extra": "x"}, entries) == [[0, 1]]
+
+
+def test_external_merger_excludes_local_only_entries(monkeypatch):
+    import io
+    import json
+    from dataclasses import replace
+
+    calls = []
+
+    def response(request, **kwargs):
+        calls.append(json.loads(json.loads(request.data)["messages"][1]["content"]))
+        body = {"choices": [{"message": {"content": json.dumps({"groups": [[0, 1]]})}}]}
+        return io.BytesIO(json.dumps(body).encode())
+
+    monkeypatch.setattr("intel_daily.similarity.urllib.request.urlopen", response)
+    merger = DeepSeekSimilarityMerger(api_key="test-only")
+    entries = [
+        replace(_entry(1, "first"), allow_external_ai=True),
+        _entry(2, "local only"),
+        replace(_entry(3, "third"), allow_external_ai=True),
+    ]
+    assert merger.find_groups(entries) == [[0, 2]]
+    assert [row["title"] for row in calls[0]] == ["first", "third"]

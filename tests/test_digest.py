@@ -339,51 +339,57 @@ def test_render_brief_limited_empty_plan_within_default() -> None:
     assert "今日情报简报 2026-08-26" in text
 
 
-def test_ai_rank_engine_uses_deepseek_contract(tmp_path) -> None:
-    from intel_daily.digest import DigestEntry, DeepSeekRankEngine
+def test_ai_rank_engine_uses_deepseek_contract(monkeypatch) -> None:
+    import io
     import json
-    import threading
-    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    import urllib.request
+
+    from intel_daily.digest import DigestEntry, DeepSeekRankEngine
 
     captured = {}
 
-    class H(BaseHTTPRequestHandler):
-        def do_POST(self):  # noqa: N802
-            length = int(self.headers.get("Content-Length", "0"))
-            captured["body"] = json.loads(self.rfile.read(length))
-            out = json.dumps({"choices": [{"message": {"content": json.dumps(
-                {"ranking": [2, 0, 1], "notes": {"2": "价格波动显著", "0": "政策落地"}})} }]}).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(out)))
-            self.end_headers()
-            self.wfile.write(out)
+    def respond(request, **_kwargs):
+        captured["body"] = json.loads(request.data)
+        model_answer = {"ranking": [2, 0, 1], "notes": {"2": "价格波动显著"}}
+        body = {"choices": [{"message": {"content": json.dumps(model_answer)}}]}
+        return io.BytesIO(json.dumps(body).encode())
 
-        def log_message(self, *a):  # noqa: D102
-            pass
+    def entry(title, allow_external_ai):
+        return DigestEntry(
+            title=title, summary=f"{title} summary", block="行业动态", importance="low",
+            url="https://example.org/news", publisher="publisher",
+            published_at="2026-08-25T00:00:00+00:00",
+            allow_external_ai=allow_external_ai,
+        )
 
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), H)
-    t = threading.Thread(target=httpd.serve_forever, daemon=True)
-    t.start()
-    try:
-        engine = DeepSeekRankEngine(api_key="test-key", base_url=f"http://127.0.0.1:{httpd.server_address[1]}")
-        entries = [
-            DigestEntry(title="A", summary="a", block="新能源与储能", importance="low", url="http://x/1", publisher="p", published_at="2026-08-25T00:00:00+00:00"),
-            DigestEntry(title="B", summary="b", block="材料与产业链", importance="low", url="http://x/2", publisher="p", published_at="2026-08-25T00:00:00+00:00"),
-            DigestEntry(title="C", summary="c", block="政策与监管", importance="low", url="http://x/3", publisher="p", published_at="2026-08-25T00:00:00+00:00"),
-        ]
-        ranked = engine.rank(entries)
-    finally:
-        httpd.shutdown()
-    assert [e.title for e in ranked] == ["C", "A", "B"]
-    assert ranked[0].note == "价格波动显著"
-    assert "json" in captured["body"].get("response_format", {}).get("type", "")
+    monkeypatch.setattr(urllib.request, "urlopen", respond)
+    entries = [entry("A", True), entry("Local", False), entry("B", True), entry("C", True)]
+    ranked = DeepSeekRankEngine(api_key="test-only").rank(entries)
+    assert [item.title for item in ranked] == ["Local", "C", "A", "B"]
+    assert ranked[1].note == "价格波动显著"
+    sent = json.loads(captured["body"]["messages"][1]["content"])
+    assert [row["title"] for row in sent] == ["A", "B", "C"]
+    assert "json" in captured["body"]["response_format"]["type"]
+
+
+def test_digest_excludes_unsafe_links_even_if_previously_stored() -> None:
+    from intel_daily.digest import plan_entries
+    from intel_daily.notifier import render_digest
+
+    rows = [
+        _row("invalid", "Invalid link", original_url="file:///tmp/sample"),
+        _row("valid", "Valid link", original_url="https://example.org/news"),
+    ]
+    assert [entry.title for entry in plan_entries(rows).total] == ["Valid link"]
+    text = render_digest(rows, date_label="2026-11-24")
+    assert "Valid link" in text
+    assert "Invalid link" not in text
 
 
 def test_ai_rank_engine_failure_falls_back_to_none() -> None:
     from intel_daily.digest import DigestEntry, DeepSeekRankEngine
 
-    entry = DigestEntry(title="A", summary="a", block="x", importance="low", url="http://x/1", publisher="p", published_at="2026-08-25T00:00:00+00:00")
+    entry = DigestEntry(title="A", summary="a", block="x", importance="low", url="http://x/1", publisher="p", published_at="2026-08-25T00:00:00+00:00", allow_external_ai=True)
     engine = DeepSeekRankEngine(api_key="test-key", base_url="http://127.0.0.1:1")
     assert engine.rank([entry]) is None
 
